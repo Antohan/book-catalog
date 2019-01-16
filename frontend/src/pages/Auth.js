@@ -2,6 +2,8 @@ import * as React from 'react';
 
 import './Auth.css';
 
+import AuthContext from '../context/auth-context';
+
 class AuthPage extends React.Component {
   constructor(props) {
     super(props);
@@ -13,6 +15,8 @@ class AuthPage extends React.Component {
     this.emailEl = React.createRef();
     this.passwordEl = React.createRef();
   }
+
+  static contextType = AuthContext;
 
   switchModeHandler = () => {
     this.setState(prevState => {
@@ -68,7 +72,13 @@ class AuthPage extends React.Component {
         return res.json();
       })
       .then(resData => {
-        console.log(resData);
+        if (resData.data.login.token) {
+          this.context.login(
+            resData.data.login.token,
+            resData.data.login.userId,
+            resData.data.login.tokenExpiration
+          );
+        }
       })
       .catch(err => {
         console.log(err);
