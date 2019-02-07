@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import Modal from '../components/Modal/Modal';
 import Backdrop from '../components/Backdrop/Backdrop';
-import AuthContext from  '../context/auth-context';
+import EventList from '../components/Events/EventList/EventList';
+import AuthContext from '../context/auth-context';
 
 import './Events.css';
 
@@ -11,10 +12,12 @@ class EventsPage extends React.Component {
 
   constructor(props) {
     super(props);
-    
+
     this.state = {
       creating: false,
-      events: []
+      events: [],
+      isLoading: false,
+      selectedEvent: null,
     };
 
     this.titleElRef = React.createRef();
@@ -29,7 +32,7 @@ class EventsPage extends React.Component {
 
   startCreateEventHandler = () => {
     this.setState({ creating: true });
-  }
+  };
 
   modalConfirmHandler = () => {
     this.setState({ creating: false });
@@ -47,9 +50,9 @@ class EventsPage extends React.Component {
     ) {
       return;
     }
-    
+
     const requestBody = {
-        query: `
+      query: `
           mutation {
             createEvent(eventInput: { title: "${title}", description: "${description}", price: ${price}, date: "${date}" }) {
               _id
@@ -57,23 +60,19 @@ class EventsPage extends React.Component {
               description
               date
               price
-              creator {
-                _id
-                email
-              }
             }
           }
         `
-      };
-      
-      const token = this.context.token;
+    };
+
+    const token = this.context.token;
 
     fetch('http://localhost:9000/graphql', {
       method: 'POST',
       body: JSON.stringify(requestBody),
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
+        Authorization: 'Bearer ' + token
       }
     })
       .then(res => {
@@ -83,7 +82,20 @@ class EventsPage extends React.Component {
         return res.json();
       })
       .then(resData => {
-        this.fetchEvents();
+        this.setState(prevState => {
+          const updatedEvents = [...prevState.events];
+          updatedEvents.push({
+            _id: resData.data.createEvent._id,
+            title: resData.data.createEvent.title,
+            description: resData.data.createEvent.description,
+            date: resData.data.createEvent.date,
+            price: resData.data.createEvent.price,
+            creator: {
+              _id: this.context.userId
+            }
+          });
+          return { events: updatedEvents };
+        });
       })
       .catch(err => {
         console.log(err);
@@ -91,10 +103,12 @@ class EventsPage extends React.Component {
   };
 
   modalCancelHandler = () => {
-    this.setState({ creating: false });
+    this.setState({ creating: false, selectedEvent: null });
   };
 
   fetchEvents() {
+    this.setState({ isLoading: true });
+
     const requestBody = {
       query: `
         query {
@@ -112,12 +126,12 @@ class EventsPage extends React.Component {
         }
       `
     };
-    
+
     fetch('http://localhost:9000/graphql', {
       method: 'POST',
       body: JSON.stringify(requestBody),
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       }
     })
       .then(res => {
@@ -128,59 +142,100 @@ class EventsPage extends React.Component {
       })
       .then(resData => {
         const events = resData.data.events;
-        this.setState({ events: events });
+        this.setState({ events: events, isLoading: false });
       })
       .catch(err => {
+        this.setState({ isLoading: false });
         console.log(err);
       });
   }
 
-  render() {
-    const eventList = this.state.events.map(event => {
-      return <li key={event._id} className="events__list-item">{event.title}</li>
+  showDetailHandler = (eventId) => {
+    this.setState(prevState => {
+      const selectedEvent = prevState.events.find(e => e._id === eventId);
+      return { selectedEvent: selectedEvent };
     });
+  }
 
+  bookEventHandler = () => {
+
+  }
+
+  render() {
     return (
-    <React.Fragment>
-      {this.state.creating && <Backdrop />}
-      {this.state.creating && (
-        <Modal
-          title="Add Event"
-          canCancel
-          canConfirm
-          onCancel={this.modalCancelHandler}
-          onConfirm={this.modalConfirmHandler}
-        >
-          <form>
-            <div className="form-control">
-              <label htmlFor="title">Title</label>
-              <input type="text" id="title" ref={this.titleElRef} />
-            </div>
-            <div className="form-control">
-              <label htmlFor="price">Price</label>
-              <input type="number" id="price" ref={this.priceElRef}/>
-            </div>
-            <div className="form-control">
-              <label htmlFor="date">Date</label>
-              <input type="datetime-local" id="date" ref={this.dateElRef}/>
-            </div>
-            <div className="form-control">
-              <label htmlFor="description">Description</label>
-              <textarea id="description" row="4" ref={this.descriptionElRef}></textarea>
-            </div>
-          </form>
-        </Modal>
-      )}
-      {this.context.token && (
-        <div className="events-control">
-          <p>Share your own Events!</p>
-          <button className="btn" onClick={this.startCreateEventHandler}>Create Event</button>
-        </div>
-      )}
-      <ul className="events__list">
-        {eventList}
-      </ul>
-    </React.Fragment>
+      <React.Fragment>
+        {(this.state.creating || this.state.selectedEvent) && <Backdrop />}
+        {this.state.creating && (
+          <Modal
+            title="Add Event"
+            canCancel
+            canConfirm
+            onCancel={this.modalCancelHandler}
+            onConfirm={this.bookEventHandler}
+            confirmText="Confirm"
+          >
+            <form>
+              <div className="form-control">
+                <label htmlFor="title">Title</label>
+                <input type="text" id="title" ref={this.titleElRef} />
+              </div>
+              <div className="form-control">
+                <label htmlFor="price">Price</label>
+                <input type="number" id="price" ref={this.priceElRef} />
+              </div>
+              <div className="form-control">
+                <label htmlFor="date">Date</label>
+                <input type="datetime-local" id="date" ref={this.dateElRef} />
+              </div>
+              <div className="form-control">
+                <label htmlFor="description">Description</label>
+                <textarea
+                  id="description"
+                  row="4"
+                  ref={this.descriptionElRef}
+                />
+              </div>
+            </form>
+          </Modal>
+        )}
+
+        {
+          this.state.selectedEvent && (
+            <Modal
+              title={this.state.selectedEvent.title}
+              canCancel
+              canConfirm
+              onCancel={this.modalCancelHandler}
+              onConfirm={this.modalConfirmHandler}
+              confirmText="Book"
+            >
+              <h1>{this.state.selectedEvent.title}</h1>
+              <h2>
+                ${this.state.selectedEvent.price} - {new Date(this.state.selectedEvent.date).toLocaleDateString('ru-Ru')}
+              </h2>
+              <p>{this.state.selectedEvent.description}</p>
+              
+            </Modal>
+          )
+        }
+
+        {this.context.token && (
+          <div className="events-control">
+            <p>Share your own Events!</p>
+            <button className="btn" onClick={this.startCreateEventHandler}>
+              Create Event
+            </button>
+          </div>
+        )}
+        {this.state.isLoading
+          ? <div className="spinner"><div className="lds-dual-ring"></div></div>
+          : <EventList
+              events={this.state.events}
+              authUserId={this.context.userId}
+              onViewDetail={this.showDetailHandler}
+            />
+          }
+      </React.Fragment>
     );
   }
 }
