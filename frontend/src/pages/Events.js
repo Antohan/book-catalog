@@ -10,6 +10,8 @@ import './Events.css';
 class EventsPage extends React.Component {
   static contextType = AuthContext;
 
+  isActive = true;
+
   constructor(props) {
     super(props);
 
@@ -72,7 +74,7 @@ class EventsPage extends React.Component {
       body: JSON.stringify(requestBody),
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + token
+        'Authorization': 'Bearer ' + token
       }
     })
       .then(res => {
@@ -142,11 +144,15 @@ class EventsPage extends React.Component {
       })
       .then(resData => {
         const events = resData.data.events;
-        this.setState({ events: events, isLoading: false });
+        if (this.isActive) {
+          this.setState({ events: events, isLoading: false });
+        }
       })
       .catch(err => {
-        this.setState({ isLoading: false });
         console.log(err);
+        if (this.isActive) {
+          this.setState({ isLoading: false });
+        }
       });
   }
 
@@ -158,7 +164,49 @@ class EventsPage extends React.Component {
   }
 
   bookEventHandler = () => {
+    if(!this.context.token) {
+      this.setState({ selectedEvent: null });
+      return;
+    }
 
+    const requestBody = {
+      query: `
+        mutation {
+          bookEvent(eventId: "${this.state.selectedEvent._id}") {
+            _id
+            createdAt
+            updatedAt
+          }
+        }
+      `
+    };
+
+    fetch('http://localhost:9000/graphql', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.context.token}`
+      }
+    })
+      .then(res => {
+        if (res.status !== 200 && res.status !== 201) {
+          throw new Error('Failed!');
+        }
+        return res.json();
+      })
+      .then(resData => {
+        console.log(resData);
+        this.setState({ selectedEvent: null });
+      })
+      .catch(err => {
+        this.setState({ isLoading: false });
+        console.log(err);
+      });
+  }
+
+  componentWillUnmount() {
+    this.isActive = false;
   }
 
   render() {
@@ -171,7 +219,7 @@ class EventsPage extends React.Component {
             canCancel
             canConfirm
             onCancel={this.modalCancelHandler}
-            onConfirm={this.bookEventHandler}
+            onConfirm={this.modalConfirmHandler}
             confirmText="Confirm"
           >
             <form>
@@ -206,7 +254,7 @@ class EventsPage extends React.Component {
               canCancel
               canConfirm
               onCancel={this.modalCancelHandler}
-              onConfirm={this.modalConfirmHandler}
+              onConfirm={this.bookEventHandler}
               confirmText="Book"
             >
               <h1>{this.state.selectedEvent.title}</h1>
