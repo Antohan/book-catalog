@@ -19,6 +19,10 @@ const events = async eventIds => {
       }
     });
 
+    events.sort((a, b) => {
+      return eventIds.indexOf(a._id.toString()) - eventIds.indexOf(b._id.toString());
+    });
+
     return events.map(event => transformEvent(event));
   } catch (err) {
     throw err;
